@@ -1,0 +1,334 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+
+  // Profile
+  firstName String?
+  lastName  String?
+
+  // Account status
+  isActive  Boolean  @default(true)
+  isVerified Boolean @default(false)
+
+  // Password reset (T019a - remediation)
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  foodItems    FoodItem[]
+  documents    Document[]
+  notifications Notification[]
+  preference   NotificationPreference?
+  subscription Subscription?
+
+  // FCM tokens for push notifications
+  fcmTokens    FcmToken[]
+
+  @@index([email])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model FcmToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Device info
+  platform  String   // "ios" | "android"
+  deviceId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([token])
+  @@map("fcm_tokens")
+}
+
+// ============================================================================
+// ITEM TRACKING
+// ============================================================================
+
+model FoodItem {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic info
+  name        String
+  category    FoodCategory
+  quantity    String?  // e.g., "2 liters", "500g", "3 pieces"
+  storageType StorageType
+
+  // Expiry tracking
+  expiryDate  DateTime
+  status      ExpiryStatus @default(SAFE)
+
+  // Photo
+  photoUrl    String?  // Cloudinary public_id
+
+  // Metadata
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([expiryDate])
+  @@index([status])
+  @@index([userId, expiryDate])
+  @@map("food_items")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Basic info
+  name        String   // e.g., "Passport", "Driver's License", "Gym Membership"
+  type        DocumentType
+  customType  String?  // Used when type = CUSTOM
+
+  // Document details
+  documentNumber String?
+  issuedDate     DateTime?
+  expiryDate     DateTime
+  status         ExpiryStatus @default(SAFE)
+
+  // Photo
+  photoUrl    String?  // Cloudinary public_id
+
+  // Metadata
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([expiryDate])
+  @@index([status])
+  @@index([userId, expiryDate])
+  @@map("documents")
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Item reference (polymorphic)
+  itemType  ItemType // "FOOD" | "DOCUMENT"
+  foodItemId String?
+  foodItem   FoodItem? @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+  documentId String?
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  // Notification content
+  title     String
+  body      String
+
+  // Scheduling
+  scheduledFor DateTime
+  sentAt       DateTime?
+
+  // Delivery status
+  status    NotificationStatus @default(PENDING)
+
+  // FCM response
+  fcmMessageId String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([scheduledFor])
+  @@index([status])
+  @@index([userId, status])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Global settings
+  enabled   Boolean  @default(true)
+
+  // Item type toggles
+  foodNotificationsEnabled     Boolean @default(true)
+  documentNotificationsEnabled Boolean @default(true)
+
+  // Custom intervals (days before expiry)
+  intervals Int[]    @default([30, 15, 7, 1])
+
+  // Quiet hours
+  quietHoursEnabled Boolean @default(false)
+  quietHoursStart   String? // e.g., "22:00"
+  quietHoursEnd     String? // e.g., "08:00"
+
+  // Preferred notification time
+  preferredTime String? // e.g., "09:00" (daily notification time)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+// ============================================================================
+// SUBSCRIPTIONS
+// ============================================================================
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Plan details
+  plan      SubscriptionPlan @default(FREE)
+  status    SubscriptionStatus @default(ACTIVE)
+
+  // Billing
+  startDate DateTime @default(now())
+  endDate   DateTime?
+
+  // Payment integration
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  // Metadata
+  cancelledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ============================================================================
+// ADMIN
+// ============================================================================
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+
+  // Profile
+  name      String
+  role      AdminRole @default(ADMIN)
+
+  // Status
+  isActive  Boolean  @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  @@index([email])
+  @@map("admin_users")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum FoodCategory {
+  DAIRY
+  MEAT
+  SEAFOOD
+  VEGETABLES
+  FRUITS
+  GRAINS
+  BEVERAGES
+  CONDIMENTS
+  FROZEN
+  OTHER
+}
+
+enum StorageType {
+  REFRIGERATOR
+  FREEZER
+  PANTRY
+  COUNTER
+}
+
+enum DocumentType {
+  PASSPORT
+  VISA
+  DRIVERS_LICENSE
+  ID_CARD
+  INSURANCE_POLICY
+  MEMBERSHIP
+  CUSTOM
+}
+
+enum ExpiryStatus {
+  SAFE      // > 30 days
+  EXPIRING_SOON // 1-30 days
+  EXPIRED   // < 0 days
+}
+
+enum ItemType {
+  FOOD
+  DOCUMENT
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum SubscriptionPlan {
+  FREE
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}

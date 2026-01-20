@@ -1,0 +1,489 @@
+openapi: 3.0.0
+info:
+  title: Food & Document Expiry Tracker - Items API
+  version: 1.0.0
+  description: Endpoints for managing food items and documents
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://api.expirytracker.app/api
+    description: Production server
+
+paths:
+  /items:
+    get:
+      summary: List user's items (food and documents)
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, food, document]
+            default: all
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [SAFE, EXPIRING_SOON, EXPIRED]
+        - name: category
+          in: query
+          schema:
+            type: string
+            description: Food category filter
+        - name: search
+          in: query
+          schema:
+            type: string
+            description: Search by item name
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            description: Cursor for pagination
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Items retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/schemas/FoodItem'
+                        - $ref: '#/components/schemas/Document'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+                  summary:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      expired:
+                        type: integer
+                      expiringSoon:
+                        type: integer
+                      safe:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Create new item (food or document)
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CreateFoodItemDto'
+                - $ref: '#/components/schemas/CreateDocumentDto'
+      responses:
+        '201':
+          description: Item created successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FoodItem'
+                  - $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Item limit reached (free tier)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /items/{id}:
+    get:
+      summary: Get item details
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item retrieved successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FoodItem'
+                  - $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update item
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/UpdateFoodItemDto'
+                - $ref: '#/components/schemas/UpdateDocumentDto'
+      responses:
+        '200':
+          description: Item updated successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FoodItem'
+                  - $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete item
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Item deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Item deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /items/{id}/photo:
+    post:
+      summary: Upload item photo
+      tags:
+        - Items
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  photoUrl:
+                    type: string
+                    example: https://res.cloudinary.com/demo/image/upload/v1234567890/abc123.jpg
+        '400':
+          description: Invalid file or file too large
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    FoodItem:
+      type: object
+      properties:
+        id:
+          type: string
+        itemType:
+          type: string
+          enum: [FOOD]
+        name:
+          type: string
+        category:
+          type: string
+          enum: [DAIRY, MEAT, SEAFOOD, VEGETABLES, FRUITS, GRAINS, BEVERAGES, CONDIMENTS, FROZEN, OTHER]
+        quantity:
+          type: string
+          nullable: true
+        storageType:
+          type: string
+          enum: [REFRIGERATOR, FREEZER, PANTRY, COUNTER]
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [SAFE, EXPIRING_SOON, EXPIRED]
+        photoUrl:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+        itemType:
+          type: string
+          enum: [DOCUMENT]
+        name:
+          type: string
+        type:
+          type: string
+          enum: [PASSPORT, VISA, DRIVERS_LICENSE, ID_CARD, INSURANCE_POLICY, MEMBERSHIP, CUSTOM]
+        customType:
+          type: string
+          nullable: true
+        documentNumber:
+          type: string
+          nullable: true
+        issuedDate:
+          type: string
+          format: date
+          nullable: true
+        expiryDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [SAFE, EXPIRING_SOON, EXPIRED]
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateFoodItemDto:
+      type: object
+      required:
+        - itemType
+        - name
+        - category
+        - storageType
+        - expiryDate
+      properties:
+        itemType:
+          type: string
+          enum: [FOOD]
+        name:
+          type: string
+          maxLength: 100
+        category:
+          type: string
+          enum: [DAIRY, MEAT, SEAFOOD, VEGETABLES, FRUITS, GRAINS, BEVERAGES, CONDIMENTS, FROZEN, OTHER]
+        quantity:
+          type: string
+          maxLength: 50
+        storageType:
+          type: string
+          enum: [REFRIGERATOR, FREEZER, PANTRY, COUNTER]
+        expiryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 500
+
+    UpdateFoodItemDto:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        category:
+          type: string
+          enum: [DAIRY, MEAT, SEAFOOD, VEGETABLES, FRUITS, GRAINS, BEVERAGES, CONDIMENTS, FROZEN, OTHER]
+        quantity:
+          type: string
+          maxLength: 50
+        storageType:
+          type: string
+          enum: [REFRIGERATOR, FREEZER, PANTRY, COUNTER]
+        expiryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 500
+
+    CreateDocumentDto:
+      type: object
+      required:
+        - itemType
+        - name
+        - type
+        - expiryDate
+      properties:
+        itemType:
+          type: string
+          enum: [DOCUMENT]
+        name:
+          type: string
+          maxLength: 100
+        type:
+          type: string
+          enum: [PASSPORT, VISA, DRIVERS_LICENSE, ID_CARD, INSURANCE_POLICY, MEMBERSHIP, CUSTOM]
+        customType:
+          type: string
+          maxLength: 50
+        documentNumber:
+          type: string
+          maxLength: 50
+        issuedDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 500
+
+    UpdateDocumentDto:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        type:
+          type: string
+          enum: [PASSPORT, VISA, DRIVERS_LICENSE, ID_CARD, INSURANCE_POLICY, MEMBERSHIP, CUSTOM]
+        customType:
+          type: string
+          maxLength: 50
+        documentNumber:
+          type: string
+          maxLength: 50
+        issuedDate:
+          type: string
+          format: date
+        expiryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+          maxLength: 500
+
+    Pagination:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

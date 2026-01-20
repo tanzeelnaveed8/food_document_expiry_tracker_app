@@ -1,0 +1,438 @@
+openapi: 3.0.0
+info:
+  title: Food & Document Expiry Tracker - Admin API
+  version: 1.0.0
+  description: Admin panel endpoints for user management and analytics
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://api.expirytracker.app/api
+    description: Production server
+
+paths:
+  /admin/stats:
+    get:
+      summary: Get dashboard statistics
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users:
+    get:
+      summary: List all users
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, all]
+            default: all
+        - name: plan
+          in: query
+          schema:
+            type: string
+            enum: [free, premium, all]
+            default: all
+        - name: search
+          in: query
+          schema:
+            type: string
+            description: Search by email or name
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserDetail'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{id}:
+    get:
+      summary: Get user details
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailExtended'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/notifications/broadcast:
+    post:
+      summary: Send broadcast notification
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BroadcastNotificationDto'
+      responses:
+        '200':
+          description: Broadcast notification queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Broadcast notification queued successfully
+                  targetUserCount:
+                    type: integer
+                    example: 1250
+                  broadcastId:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/notifications/delivery-status/{broadcastId}:
+    get:
+      summary: Get broadcast delivery status
+      tags:
+        - Admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: broadcastId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Delivery status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Admin JWT token
+
+  schemas:
+    DashboardStats:
+      type: object
+      properties:
+        users:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 5420
+            active:
+              type: integer
+              description: Active in last 7 days
+              example: 3210
+            inactive:
+              type: integer
+              description: Inactive for 30+ days
+              example: 890
+            premium:
+              type: integer
+              example: 271
+            premiumPercentage:
+              type: number
+              format: float
+              example: 5.0
+        items:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 54200
+            food:
+              type: integer
+              example: 38940
+            documents:
+              type: integer
+              example: 15260
+            expired:
+              type: integer
+              example: 2150
+            expiringSoon:
+              type: integer
+              example: 8430
+        notifications:
+          type: object
+          properties:
+            sentToday:
+              type: integer
+              example: 1250
+            sentThisWeek:
+              type: integer
+              example: 8750
+            deliveryRate:
+              type: number
+              format: float
+              example: 96.5
+            failedToday:
+              type: integer
+              example: 45
+        growth:
+          type: object
+          properties:
+            newUsersToday:
+              type: integer
+              example: 42
+            newUsersThisWeek:
+              type: integer
+              example: 287
+            newUsersThisMonth:
+              type: integer
+              example: 1150
+
+    UserDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        isPremium:
+          type: boolean
+        isActive:
+          type: boolean
+        itemCount:
+          type: integer
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    UserDetailExtended:
+      allOf:
+        - $ref: '#/components/schemas/UserDetail'
+        - type: object
+          properties:
+            foodItemCount:
+              type: integer
+            documentCount:
+              type: integer
+            notificationsSent:
+              type: integer
+            subscription:
+              type: object
+              nullable: true
+              properties:
+                plan:
+                  type: string
+                  enum: [FREE, PREMIUM]
+                status:
+                  type: string
+                  enum: [ACTIVE, CANCELLED, EXPIRED]
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                  nullable: true
+            recentItems:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  type:
+                    type: string
+                    enum: [FOOD, DOCUMENT]
+                  expiryDate:
+                    type: string
+                    format: date
+                  status:
+                    type: string
+                    enum: [SAFE, EXPIRING_SOON, EXPIRED]
+
+    BroadcastNotificationDto:
+      type: object
+      required:
+        - title
+        - body
+        - targetAudience
+      properties:
+        title:
+          type: string
+          maxLength: 100
+          example: New Feature Available!
+        body:
+          type: string
+          maxLength: 500
+          example: Check out our new export feature in the premium plan
+        targetAudience:
+          type: string
+          enum: [all, premium, free, inactive]
+          description: |
+            - all: All users
+            - premium: Premium subscribers only
+            - free: Free tier users only
+            - inactive: Users inactive for 30+ days
+        scheduleFor:
+          type: string
+          format: date-time
+          nullable: true
+          description: Schedule for future delivery (null = send immediately)
+
+    DeliveryStatus:
+      type: object
+      properties:
+        broadcastId:
+          type: string
+        title:
+          type: string
+        targetUserCount:
+          type: integer
+        sentCount:
+          type: integer
+        deliveredCount:
+          type: integer
+        failedCount:
+          type: integer
+        pendingCount:
+          type: integer
+        deliveryRate:
+          type: number
+          format: float
+          example: 96.5
+        status:
+          type: string
+          enum: [PENDING, IN_PROGRESS, COMPLETED, FAILED]
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    Pagination:
+      type: object
+      properties:
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+
+    Error:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        message:
+          type: string
+        error:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - Admin access required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

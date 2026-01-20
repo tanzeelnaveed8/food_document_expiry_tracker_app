@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\".specify/scripts/bash/create-phr.sh\" --title \"Initial production-ready constitution\" --stage constitution --json)",
+      "Bash(git fetch --all --prune)",
+      "Bash(ls:*)",
+      "Bash(powershell:*)",
+      "Bash(dir /b)",
+      "Bash(npm init -y)",
+      "Bash(npm install --save @nestjs/core @nestjs/common @nestjs/platform-express reflect-metadata rxjs)",
+      "Bash(npm install:*)",
+      "Bash(npx react-native@latest init:*)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(npx @react-native-community/cli@latest init:*)",
+      "Bash(npx @nestjs/cli new:*)",
+      "Bash(nest new:*)",
+      "Bash(npx prisma generate)",
+      "Bash(node:*)",
+      "Bash(npm run prisma:generate)",
+      "Bash(dir node_modules.binprisma.cmd)",
+      "Bash(npm run prisma:seed)",
+      "Bash(npm run start:dev)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(npm run test)",
+      "Bash(npm test:*)",
+      "Bash(npm run dev)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(npm run build)",
+      "Bash(npx tsc:*)",
+      "Bash(npm start)",
+      "Bash(ping:*)",
+      "Bash(tasklist)",
+      "Bash(dir:*)",
+      "Bash(npx expo start:*)",
+      "Bash(taskkill:*)"
+    ]
+  }
+}
